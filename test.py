@@ -1,27 +1,28 @@
 import unittest
 import asyncio
 import server
-try:
-    from socket import socketpair
-except ImportError:
-    from asyncio.windows_utils import socketpair
 
-class MyProtocol(asyncio.Protocol):
+class Client(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
         self.transport.write("ha-ha".encode())
-    
+
     def data_received(self, data):
-        print("Received:", data.decode())
+        self.data = data.decode()
         self.transport.close()
+        asyncio.get_event_loop().stop()
 
 class TestAsync(unittest.TestCase):
     def test_client(self):
         loop = asyncio.get_event_loop()
-        server.Server(loop)
-        connect = loop.create_connection(MyProtocol, host='localhost', port=11111)
-        loop.run_until_complete(connect)
+        srv = loop.create_server(server.Server, host='localhost', port=11111, reuse_address=True)
+        asyncio.ensure_future(srv)
+        client = Client()
+        connect = loop.create_connection(lambda: client, host='localhost', port=11111)
+        asyncio.ensure_future(connect)
         loop.run_forever()
-        
+        loop.close()
+        self.assertEqual(client.data, "You:ha-haEveryone:")
+
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(warnings='ignore')
